@@ -2,8 +2,8 @@ name: GitHub Streak Keeper
 
 on:
   schedule:
-    - cron: '20 18 * * *'  # 11:50 PM IST = 6:20 PM UTC
-  workflow_dispatch:       # Allow manual trigger
+    - cron: '20 18 * * *'  # Runs at 11:50 PM IST (which is 18:20 UTC)
+  workflow_dispatch:
 
 jobs:
   check-and-commit:
@@ -19,12 +19,9 @@ jobs:
           DATE=$(date -u +%Y-%m-%d)
           echo "DATE=$DATE" >> $GITHUB_ENV
 
-          QUERY=$(cat <<EOF
-          {
-            "query": "query { user(login: \\\"${{ github.actor }}\\\") { contributionsCollection(from: \\\"${DATE}T00:00:00Z\\\", to: \\\"${DATE}T23:59:59Z\\\") { contributionCalendar { totalContributions }}}}"
-          }
-EOF
-          )
+          QUERY='{
+            "query": "query { user(login: \\\"${{ github.actor }}\\\") { contributionsCollection(from: \\\"'$DATE'T00:00:00Z\\\", to: \\\"'$DATE'T23:59:59Z\\\") { contributionCalendar { totalContributions }}}}"
+          }'
 
           RESPONSE=$(curl -s -H "Authorization: bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/json" \
