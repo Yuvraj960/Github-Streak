@@ -1,0 +1,51 @@
+name: GitHub Streak Keeper
+
+on:
+  schedule:
+    - cron: '20 18 * * *'  # 11:50 PM IST = 6:20 PM UTC
+  workflow_dispatch:       # Allow manual trigger
+
+jobs:
+  check-and-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check GitHub contributions via GraphQL
+        id: check
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          echo "DATE=$DATE" >> $GITHUB_ENV
+
+          QUERY=$(cat <<EOF
+          {
+            "query": "query { user(login: \\\"${{ github.actor }}\\\") { contributionsCollection(from: \\\"${DATE}T00:00:00Z\\\", to: \\\"${DATE}T23:59:59Z\\\") { contributionCalendar { totalContributions }}}}"
+          }
+EOF
+          )
+
+          RESPONSE=$(curl -s -H "Authorization: bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "$QUERY" https://api.github.com/graphql)
+
+          echo "GraphQL Response: $RESPONSE"
+          TOTAL=$(echo "$RESPONSE" | jq -r '.data.user.contributionsCollection.contributionCalendar.totalContributions')
+
+          echo "Total Contributions Today: $TOTAL"
+          if [[ "$TOTAL" == "0" ]]; then
+            echo "needs_commit=true" >> $GITHUB_OUTPUT
+          else
+            echo "needs_commit=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Make fallback commit
+        if: steps.check.outputs.needs_commit == 'true'
+        run: |
+          echo "Streak commit on $(date)" >> streak_log.txt
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git add streak_log.txt
+          git commit -m "Streak saver commit - $(date)"
+          git push
